@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Jarvis</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    header { padding: 10px 14px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    header h1 { font-size: 1.05rem; color: #38bdf8; }
+    .status-pill { font-size: 0.76rem; padding: 4px 10px; border-radius: 999px; background: #0f172a; border: 1px solid #334155; color: #94a3b8; transition: all 0.2s; }
+    .status-pill.busy { background: #1e3a8a; border-color: #38bdf8; color: #e0f2fe; animation: pulse 1.2s infinite ease-in-out; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .quick-cmds { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .quick-cmds button, .quick-cmds a { background: #334155; color: #e2e8f0; border: 1px solid #475569; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.78rem; text-decoration: none; }
+    .quick-cmds button:hover, .quick-cmds a:hover { background: #475569; }
+    .zip-btn { background: #059669 !important; border-color: #10b981 !important; color: white !important; font-weight: 600; }
+    .mobile-tab-btn { display: none; background: #0284c7 !important; color: white !important; border: none !important; font-weight: 600; }
+    main { flex: 1; display: grid; grid-template-columns: 1.35fr 1fr; overflow: hidden; }
+    /* Left: Chat */
+    .chat-pane { display: flex; flex-direction: column; border-right: 1px solid #334155; height: 100%; overflow: hidden; }
+    #messages { flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 88%; padding: 10px 14px; border-radius: 12px; line-height: 1.45; white-space: pre-wrap; font-size: 0.95rem; }
+    .msg.user { align-self: flex-end; background: #0284c7; color: white; }
+    .msg.assistant { align-self: flex-start; background: #1e293b; border: 1px solid #334155; }
+    .msg.thinking { align-self: flex-start; background: #0f172a; border: 1px dashed #38bdf8; color: #38bdf8; font-size: 0.88rem; }
+    .tool-badge { font-size: 0.78rem; color: #34d399; background: #064e3b; padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; white-space: pre-wrap; }
+    .msg-meta { font-size: 0.72rem; color: #64748b; margin-top: 6px; }
+    .input-bar { padding: 10px; background: #1e293b; border-top: 1px solid #334155; display: flex; gap: 8px; }
+    .input-bar input { flex: 1; padding: 12px 14px; border-radius: 10px; border: 1px solid #475569; background: #0f172a; color: white; font-size: 1rem; }
+    .input-bar button { padding: 12px 18px; border-radius: 10px; border: none; background: #38bdf8; color: #0f172a; font-weight: 700; cursor: pointer; }
+    .input-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Right: QR + Obsidian memory.md + Ideas */
+    .memory-pane { padding: 14px; overflow-y: auto; background: #0b1120; display: flex; flex-direction: column; gap: 14px; height: 100%; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px; }
+    .card h2 { font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    pre { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.8rem; color: #cbd5e1; line-height: 1.4; }
+    .qr-grid { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+    .qr-item { text-align: center; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #334155; }
+    .qr-item img { width: 130px; height: 130px; background: white; padding: 6px; border-radius: 6px; display: block; margin: 0 auto 6px; }
+    .qr-item small { color: #38bdf8; font-family: monospace; font-size: 0.75rem; display: block; }
+    /* Mobile Responsive View */
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+      .mobile-tab-btn { display: inline-block; }
+      .memory-pane { display: none; }
+      body.show-memory .chat-pane { display: none; }
+      body.show-memory .memory-pane { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>⚡ Jarvis</h1>
+      <span id="statusPill" class="status-pill">🟢 Idle — Ready</span>
+    </div>
+    <div class="quick-cmds">
+      <button class="mobile-tab-btn" id="toggleTabBtn" onclick="toggleMobilePane()">📓 Brain & QR</button>
+      <a class="zip-btn" href="/download-zip" download>📦 Download .zip</a>
+      <button onclick="sendQuick('/verdict')">/verdict</button>
+      <button onclick="sendQuick('/refresh my memory')">/refresh</button>
+      <button onclick="sendQuick('/close')">/close</button>
+      <button onclick="sendQuick('/clear')">/clear</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="chat-pane">
+      <div id="messages">
+        <div class="msg assistant">Jarvis online. Live telemetry enabled — you will now see every pass, tool call, and stopwatch timer while vm-planner-27b thinks!</div>
+      </div>
+      <form class="input-bar" onsubmit="handleSend(event)">
+        <input id="chatInput" type="text" placeholder="Message or voice-dump to Jarvis..." autocomplete="off" />
+        <button type="submit" id="sendBtn">Send</button>
+      </form>
+    </section>
+
+    <aside class="memory-pane">
+      <div class="card">
+        <h2>📱 Scan With Phone Camera</h2>
+        <div class="qr-grid">
+          <div class="qr-item">
+            <img id="qrCurrent" alt="Current Host QR" />
+            <div style="font-size:0.78rem; margin-bottom:2px;">This Machine</div>
+            <small id="urlCurrent">Loading...</small>
+          </div>
+          <div class="qr-item">
+            <img id="qrDesktop" alt="Desktop 192.168.0.25 QR" />
+            <div style="font-size:0.78rem; margin-bottom:2px;">SSH Desktop (.25)</div>
+            <small id="urlDesktop">http://192.168.0.25:8000</small>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>💡 Captured Ideas (jarvis.db)</h2>
+        <pre id="ideasBox">Loading ideas...</pre>
+      </div>
+      <div class="card">
+        <h2>📓 Obsidian Living Memory (memory.md)</h2>
+        <pre id="memoryBox">Loading memory.md...</pre>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const messagesDiv = document.getElementById("messages");
+    const chatInput = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const statusPill = document.getElementById("statusPill");
+
+    function toggleMobilePane() {
+      const showingMem = document.body.classList.toggle("show-memory");
+      document.getElementById("toggleTabBtn").textContent = showingMem ? "💬 Back to Chat" : "📓 Brain & QR";
+    }
+
+    async function loadNetworkQR() {
+      const net = await fetch("/network").then(r => r.json());
+      document.getElementById("urlCurrent").textContent = net.current_url;
+      document.getElementById("qrCurrent").src =
+        "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(net.current_url);
+      document.getElementById("urlDesktop").textContent = net.desktop_url;
+      document.getElementById("qrDesktop").src =
+        "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(net.desktop_url);
+    }
+
+    function addBubble(role, text, toolSteps = [], elapsedSeconds = null) {
+      const div = document.createElement("div");
+      div.className = "msg " + role;
+      if (toolSteps && toolSteps.length > 0) {
+        const badge = document.createElement("div");
+        badge.className = "tool-badge";
+        badge.textContent = "🛠️ Tools Executed:\n" + toolSteps.join("\n");
+        div.appendChild(badge);
+      }
+      const span = document.createElement("div");
+      span.textContent = text;
+      div.appendChild(span);
+
+      if (elapsedSeconds !== null) {
+        const meta = document.createElement("div");
+        meta.className = "msg-meta";
+        const passes = (toolSteps ? toolSteps.length : 0) + 1;
+        meta.textContent = `⚡ ${elapsedSeconds}s total • ${passes} GPU pass${passes > 1 ? 'es' : ''}`;
+        div.appendChild(meta);
+      }
+
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      return div;
+    }
+
+    async function refreshSidebar() {
+      const memRes = await fetch("/memory").then(r => r.json());
+      document.getElementById("memoryBox").textContent = memRes.memory_md || "Empty";
+
+      const ideasRes = await fetch("/ideas").then(r => r.json());
+      const ideas = ideasRes.ideas || [];
+      document.getElementById("ideasBox").textContent = ideas.length
+        ? ideas.map(i => `• [${i.category}] ${i.idea_text}`).join("\n")
+        : "No ideas saved yet.";
+    }
+
+    async function sendMessage(text) {
+      document.body.classList.remove("show-memory");
+      document.getElementById("toggleTabBtn").textContent = "📓 Brain & QR";
+      addBubble("user", text);
+      chatInput.value = "";
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Working...";
+
+      // Create a live-updating thinking bubble inside the chat
+      const thinkingBubble = document.createElement("div");
+      thinkingBubble.className = "msg thinking";
+      thinkingBubble.textContent = "⏳ Connecting to Hermes (0.0s)...";
+      messagesDiv.appendChild(thinkingBubble);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      // Poll /status every 400ms so the user sees the exact ReAct pass & stopwatch live!
+      const pollTimer = setInterval(async () => {
+        try {
+          const st = await fetch("/status").then(r => r.json());
+          if (st.busy) {
+            const label = `${st.stage} (${st.elapsed_seconds}s)`;
+            thinkingBubble.textContent = label;
+            statusPill.textContent = label;
+            statusPill.className = "status-pill busy";
+          }
+        } catch (e) {}
+      }, 400);
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        clearInterval(pollTimer);
+        thinkingBubble.remove();
+
+        statusPill.textContent = `🟢 Ready (Last: ${data.elapsed_seconds || 0}s)`;
+        statusPill.className = "status-pill";
+        addBubble("assistant", data.reply, data.tool_steps, data.elapsed_seconds);
+        await refreshSidebar();
+      } catch (err) {
+        clearInterval(pollTimer);
+        thinkingBubble.textContent = "⚠️ Error reaching Hermes: " + err;
+        statusPill.textContent = "🔴 Error";
+        statusPill.className = "status-pill";
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Send";
+      }
+    }
+
+    function handleSend(e) {
+      e.preventDefault();
+      if (chatInput.value.trim()) sendMessage(chatInput.value.trim());
+    }
+
+    function sendQuick(cmd) { sendMessage(cmd); }
+
+    loadNetworkQR();
+    refreshSidebar();
+  </script>
+</body>
+</html>
